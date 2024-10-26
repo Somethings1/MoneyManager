@@ -108,4 +108,8 @@ public class App {
 			instance = new App();
 		return instance;
 	}
+
+	public void test () {
+		System.out.println("hehe");
+	}
 }
