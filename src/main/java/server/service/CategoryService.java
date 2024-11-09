@@ -5,6 +5,8 @@ import server.model.Category;
 
 import java.util.List;
 
+import gui.app.App;
+
 public class CategoryService {
     private final CategoryDAO categoryDAO;
 
@@ -12,16 +14,21 @@ public class CategoryService {
         categoryDAO = new CategoryDAO();
     }
 
-    public void addCategory(Category category) {
+    public void addCategory(Category category) throws Exception {
+    	assertCategory(category);
         categoryDAO.insert(category);
+        App.getInstance().loadCategoryData();
     }
 
-    public void updateCategory(Category category) {
+    public void updateCategory(Category category) throws Exception {
+    	assertCategory(category);
         categoryDAO.update(category);
+        App.getInstance().loadCategoryData();
     }
 
     public void removeCategory(int categoryId) {
         categoryDAO.delete(categoryId);
+        App.getInstance().loadCategoryData();
     }
 
     public List<Category> getAllCategories() {
@@ -37,5 +44,10 @@ public class CategoryService {
     
     public Category getCategory (int id) {
     	return categoryDAO.findCategory(id);
+    }
+    
+    private void assertCategory (Category category) throws Exception {
+    	if (category.getName().isEmpty())
+    		throw new Exception ("Category name cannot be null");
     }
 }

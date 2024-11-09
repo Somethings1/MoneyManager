@@ -1,45 +1,51 @@
 package server.dao;
 
 import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 
 import server.model.Transaction;
 import server.service.AccountService;
+import server.utils.TimeUtils;
 
 public class TransactionDAO extends BaseDAO {
 
 	public void insert(Transaction transaction) {
-		String sql = "INSERT INTO transactions (date_time, amount, source_account, category, destination_account, note, type) VALUES (?, ?, ?, ?, ?, ?, ?)";
+	    String sql = "INSERT INTO transactions (date_time, amount, source_account, category, destination_account, note, type) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-		try {
-			openConnection();
-			PreparedStatement stmt = connection.prepareStatement(sql);
+	    try {
+	        openConnection();
+	        PreparedStatement stmt = connection.prepareStatement(sql);
 
-			stmt.setTimestamp(1, Timestamp.valueOf(transaction.getDateTime()));
-			stmt.setDouble(2, transaction.getAmount());
-			stmt.setInt(3, transaction.getSourceAccount());
-			if (transaction.getCategory() != 0) {
-				stmt.setInt(4, transaction.getCategory());
-			} else {
-				stmt.setNull(4, Types.INTEGER);
-			}
-			if (transaction.getDestinationAccount() != 0) {
-				stmt.setInt(5, transaction.getDestinationAccount());
-			} else {
-				stmt.setNull(5, Types.INTEGER);
-			}
-			stmt.setString(6, transaction.getNote());
-			stmt.setString(7, transaction.getType());
+	        // Convert LocalDateTime to UTC Timestamp
+	        Timestamp utcTimestamp = TimeUtils.toUtcTimestamp(transaction.getDateTime());
 
-			stmt.executeUpdate();
-			closeConnection();
-			applyTransactionOnAccount(transaction);
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-		
+	        stmt.setTimestamp(1, utcTimestamp);
+	        stmt.setDouble(2, transaction.getAmount());
+	        stmt.setInt(3, transaction.getSourceAccount());
+	        if (transaction.getCategory() != 0) {
+	            stmt.setInt(4, transaction.getCategory());
+	        } else {
+	            stmt.setNull(4, Types.INTEGER);
+	        }
+	        if (transaction.getDestinationAccount() != 0) {
+	            stmt.setInt(5, transaction.getDestinationAccount());
+	        } else {
+	            stmt.setNull(5, Types.INTEGER);
+	        }
+	        stmt.setString(6, transaction.getNote());
+	        stmt.setString(7, transaction.getType());
+
+	        stmt.executeUpdate();
+	        closeConnection();
+	        applyTransactionOnAccount(transaction);
+	    } catch (SQLException e) {
+	        e.printStackTrace();
+	    }
 	}
+
 
 	public void update(Transaction transaction) {
 		remove(transaction.getId());
@@ -126,16 +132,22 @@ public class TransactionDAO extends BaseDAO {
 	}
 	
 	public List<Transaction> findByMonth(int month, int year) {
-	    String sql = "SELECT * FROM transactions WHERE strftime('%Y-%m', datetime(date_time / 1000, 'unixepoch')) = ? ORDER BY date_time DESC";
+	    String sql = "SELECT * FROM transactions WHERE date_time >= ? AND date_time < ? ORDER BY date_time DESC";
 	    List<Transaction> transactions = new ArrayList<>();
-	    
-	    // Format the month with leading zero if necessary (e.g., '01' for January)
-	    String formattedMonth = String.format("%04d-%02d", year, month);
+
+	    // Get the start and end of the month in local time
+	    LocalDateTime startOfMonth = LocalDateTime.of(year, month, 1, 0, 0);
+	    LocalDateTime endOfMonth = startOfMonth.with(TemporalAdjusters.lastDayOfMonth()).plusDays(1); // Start of the next month
+
+	    // Convert start and end of the month to UTC
+	    Timestamp utcStartTimestamp = TimeUtils.toUtcTimestamp(startOfMonth);
+	    Timestamp utcEndTimestamp = TimeUtils.toUtcTimestamp(endOfMonth);
 
 	    try {
 	        openConnection();
 	        PreparedStatement stmt = connection.prepareStatement(sql);
-	        stmt.setString(1, formattedMonth);
+	        stmt.setTimestamp(1, utcStartTimestamp);
+	        stmt.setTimestamp(2, utcEndTimestamp);
 	        ResultSet rs = stmt.executeQuery();
 
 	        while (rs.next()) {
@@ -171,20 +183,26 @@ public class TransactionDAO extends BaseDAO {
 
 	    return transactions;
 	}
-
-	// Helper method to map a ResultSet row to a Transaction object
-	private Transaction mapRowToTransaction(ResultSet rs) throws SQLException {
+	
+	public Transaction mapRowToTransaction(ResultSet rs) throws SQLException {
 		Transaction transaction = new Transaction();
 		transaction.setId(rs.getInt("id"));
-		transaction.setDateTime(rs.getTimestamp("date_time").toLocalDateTime());
-		transaction.setAmount(rs.getDouble("amount"));
-		transaction.setSourceAccount(rs.getInt("source_account"));
-		transaction.setCategory(rs.getInt("category"));
-		transaction.setDestinationAccount(rs.getInt("destination_account"));
-		transaction.setNote(rs.getString("note"));
-		transaction.setType(rs.getString("type"));
-		return transaction;
-	}
+        // Assuming the column name is "date_time"
+        Timestamp timestamp = rs.getTimestamp("date_time");
+
+        // Convert UTC Timestamp to LocalDateTime
+        LocalDateTime localDateTime = TimeUtils.toLocalDateTime(timestamp);
+        transaction.setDateTime(localDateTime);
+
+        transaction.setAmount(rs.getDouble("amount"));
+        transaction.setSourceAccount(rs.getInt("source_account"));
+        transaction.setCategory(rs.getInt("category"));
+        transaction.setDestinationAccount(rs.getInt("destination_account"));
+        transaction.setNote(rs.getString("note"));
+        transaction.setType(rs.getString("type"));
+
+        return transaction;
+    }
 	
 	private void rollbackTransactionOnAccount(Transaction transaction) {
 		AccountService serv = new AccountService();

@@ -18,27 +18,38 @@ public class TransactionListView extends ScrollPane {
     List<Transaction> transactions;
 
     public TransactionListView(List<Transaction> transactions) {
-    	this.transactions = transactions;
+        this.transactions = transactions;
         contentPane = new VBox(10);  // Spacing between items
         setContent(contentPane);
         groupAndDisplayTransactions();
         setFitToWidth(true);
         setFitToHeight(true);
     }
-    
-    public void remove (Transaction transaction) {
-    	contentPane.getChildren().clear();
-    	transactions.remove(transaction);
-    	groupAndDisplayTransactions();
+
+    public void remove(Transaction transaction) {
+        contentPane.getChildren().clear();
+        transactions.remove(transaction);
+        groupAndDisplayTransactions();
     }
-    
-    public void add (Transaction transaction) {
-    	contentPane.getChildren().clear();
-    	transactions.add(transaction);
-    	groupAndDisplayTransactions();
+
+    public void add(Transaction transaction) {
+        contentPane.getChildren().clear();
+        transactions.add(transaction);
+        groupAndDisplayTransactions();
     }
 
     private void groupAndDisplayTransactions() {
+        // Clear the current content
+        contentPane.getChildren().clear();
+
+        // Check if transactions are empty
+        if (transactions == null || transactions.isEmpty()) {
+            Label noDataLabel = new Label("No data");
+            noDataLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 14;"); // Style the no data label
+            contentPane.getChildren().add(noDataLabel);
+            return; // Exit the method if there are no transactions
+        }
+
         // Group transactions by their date
         Map<LocalDate, List<Transaction>> groupedTransactions = transactions.stream()
             .collect(Collectors.groupingBy(transaction -> transaction.getDateTime().toLocalDate()));

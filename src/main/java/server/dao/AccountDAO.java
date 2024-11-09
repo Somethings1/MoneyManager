@@ -24,37 +24,94 @@ public class AccountDAO extends BaseDAO {
     }
 
     public void insert(Account account) {
-        String sql = "INSERT INTO accounts (name, group_name, balance) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO accounts (name, group_name, balance, goal) VALUES (?, ?, ?, ?)";
         executeWithConnection(connection -> {
             PreparedStatement pstmt = connection.prepareStatement(sql);
             pstmt.setString(1, account.getName());
             pstmt.setString(2, account.getGroup());
             pstmt.setDouble(3, account.getBalance());
+            pstmt.setDouble(4, account.getGoal());
             pstmt.executeUpdate();
             return null;
         });
     }
 
     public void update(Account account) {
-        String sql = "UPDATE accounts SET name = ?, group_name = ?, balance = ? WHERE id = ?";
+        String sql = "UPDATE accounts SET name = ?, group_name = ?, balance = ?, goal = ? WHERE id = ?";
         executeWithConnection(connection -> {
             PreparedStatement pstmt = connection.prepareStatement(sql);
             pstmt.setString(1, account.getName());
             pstmt.setString(2, account.getGroup());
             pstmt.setDouble(3, account.getBalance());
-            pstmt.setInt(4, account.getId());
+            pstmt.setDouble(4, account.getGoal());
+            pstmt.setInt(5, account.getId());
             pstmt.executeUpdate();
             return null;
         });
     }
 
     public void delete(int accountId) {
-        String sql = "DELETE FROM accounts WHERE id = ?";
+        String deleteTransactionsSql = "DELETE FROM transactions WHERE source_account = ? OR destination_account = ?";
+        String deleteAccountsSql = "DELETE FROM accounts WHERE id = ?";
+
+        // First, delete associated transactions
         executeWithConnection(connection -> {
+            try (PreparedStatement pstmtTransactions = connection.prepareStatement(deleteTransactionsSql)) {
+                pstmtTransactions.setInt(1, accountId);
+                pstmtTransactions.setInt(2, accountId);
+                pstmtTransactions.executeUpdate();
+            }
+            return null;
+        });
+
+        // Then, delete the account itself
+        executeWithConnection(connection -> {
+            try (PreparedStatement pstmtAccounts = connection.prepareStatement(deleteAccountsSql)) {
+                pstmtAccounts.setInt(1, accountId);
+                pstmtAccounts.executeUpdate();
+            }
+            return null;
+        });
+    }
+
+    
+    public double getBalanceAtEndOfMonth(int accountId, int month, int year) {
+        String sql = "WITH AccountTransactions AS ( " +
+                     "SELECT " +
+                     "    date_time, " +
+                     "    CASE " +
+                     "        WHEN type = 'Income' THEN -amount " +
+                     "        WHEN type = 'Expense' THEN amount " +
+                     "        WHEN type = 'Transfer' AND source_account = ? THEN amount " +
+                     "        WHEN type = 'Transfer' AND destination_account = ? THEN -amount " +
+                     "        ELSE 0 " +
+                     "    END AS balance_change " +
+                     "FROM transactions " +
+                     "WHERE " +
+                     "    (source_account = ? OR destination_account = ?) " +
+                     "    AND date_time >= strftime('%s', ?, 'start of month', '+1 month') * 1000 " + // First day of next month
+                     ") " +
+                     "SELECT " +
+                     "    (SELECT balance FROM accounts WHERE id = ?) + COALESCE(SUM(balance_change), 0) AS end_of_month_balance " +
+                     "FROM AccountTransactions;";
+
+        // Format the target date
+        String targetDate = String.format("%04d-%02d-01", year, month); // Format: YYYY-MM
+
+        return executeWithConnection(connection -> {
             PreparedStatement pstmt = connection.prepareStatement(sql);
             pstmt.setInt(1, accountId);
-            pstmt.executeUpdate();
-            return null;
+            pstmt.setInt(2, accountId);
+            pstmt.setInt(3, accountId);
+            pstmt.setInt(4, accountId);
+            pstmt.setString(5, targetDate);
+            pstmt.setInt(6, accountId);
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("end_of_month_balance");
+            }
+            return 0.0; // Default value if no result found
         });
     }
 
@@ -122,6 +179,7 @@ public class AccountDAO extends BaseDAO {
         account.setName(rs.getString("name"));
         account.setGroup(rs.getString("group_name"));
         account.setBalance(rs.getDouble("balance"));
+        account.setGoal(rs.getDouble("goal"));
         return account;
     }
 

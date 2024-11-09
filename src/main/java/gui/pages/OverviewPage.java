@@ -5,196 +5,330 @@ import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
 
-import org.tbee.javafx.scene.layout.MigPane;
-
 import gui.app.App;
-import gui.components.transaction.form.AddTransactionForm;
-import gui.components.transaction.list.TransactionListItem;
+import gui.components.chart.SmoothedLineChart;
+import gui.components.chart.util.GraphDataConverter;
+import gui.components.chart.util.GraphDataPoint;
+import gui.components.form.transaction.AddTransactionForm;
 import gui.components.transaction.list.TransactionListView;
 import gui.components.util.BalanceLabel;
 import gui.components.util.Modal;
 import gui.components.util.RoundedPane;
-import javafx.application.Platform;
-import javafx.geometry.Insets;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
 import server.model.Account;
 import server.model.Transaction;
 
-public class OverviewPage extends MigPane {
-	private boolean isMonthView;
-	private App app;
-	
-	private RoundedPane totalIncomePane;
-	private RoundedPane totalExpensePane;
-	private RoundedPane balancePane;
-	private RoundedPane transactionListPane;
-	private RoundedPane balanceChart;
-	private RoundedPane incomeChart;
-	private RoundedPane expenseChart;
-	private MigPane header;
-	
-	public OverviewPage () {
-		super("gap 20, fillx, debug", "[fill|fill|fill]", "[fill|fill|fill|fill]");
-		app = App.getInstance();
-		isMonthView = app.isMonthView();
-		loadAllElements();
-		buildLayout();
-	}
-	
-	private void loadAllElements() {
-		loadHeader();
-		loadTotalIncomePane();
-		loadTotalExpensePane();
-		loadBalancePane();
-		loadTransactionList();
-		loadBalanceChart();
-		loadIncomeChart();
-		loadExpenseChart();
-	}
-	
-	private String getMonthYearString(int month, int year) {
-        // Get the Month enum from the integer value
-        Month monthEnum = Month.of(month); // 1 = January, 2 = February, ..., 11 = November
+public class OverviewPage extends BorderPane {
+    private static final double VBOX_SPACING = 20;
+    private static final double SUMMARY_PANE_SPACING = 20;
+    private static final double DETAILS_PANE_SPACING = 20;
+    private static final String INCOME_TYPE = "Income";
+    private static final String EXPENSE_TYPE = "Expense";
 
-        // Get the full name of the month
-        String monthName = monthEnum.getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+    private App app;
+    private VBox headerPane;
+    private HBox summaryPane;
+    private HBox detailsPane;
+    private RoundedPane totalIncomePane;
+    private RoundedPane totalExpensePane;
+    private RoundedPane balancePane;
+    private RoundedPane transactionListPane;
+    private RoundedPane incomeChart;
+    private RoundedPane expenseChart; 
+    private VBox chartsPane;
+    private VBox mainLayout;
 
-        // Format the output string as "Month, Year"
-        return monthName + ", " + year;
-    }
-	
-	private void loadHeader () {
-		MigPane header = new MigPane("ins 0");
-		Label pageTitle = new Label();
-		if (isMonthView)
-			pageTitle.setText("Overview of " + getMonthYearString(app.getMonth(), app.getYear()));
-		else
-			pageTitle.setText("Overview of " + String.valueOf(app.getYear()));
-		pageTitle.setStyle("-fx-font: bold 32px 'Montserrat';");
-		header.add(pageTitle);
-		this.header = header;
-	}
-	
-	private void loadExpenseChart() {
-		RoundedPane pane = new RoundedPane("Expense");
-		expenseChart = pane;
-	}
+    private HBox navigationButtons;
+    
+    private BooleanProperty reloadRequest = new SimpleBooleanProperty(false);
+    private static OverviewPage overviewPage;
 
-	private void loadBalanceChart() {
-		RoundedPane pane = new RoundedPane("Balance");
-		balanceChart = pane;
-	}
-
-	private void loadIncomeChart() {
-		RoundedPane pane = new RoundedPane("Income");
-		incomeChart = pane;
-	}
-
-	private void loadTransactionList() {
-		RoundedPane pane = new RoundedPane("TransactionList");
-    	
-        // Set up the layout and scene
-        VBox vbox = new VBox();
-        List<Transaction> list = app.getTransactionList();
-        for (Transaction trans: list) {
-        	vbox.getChildren().add(new TransactionListItem(trans));
-        }
-        TransactionListView scrollPane = new TransactionListView(list);
-        StackPane root = new StackPane();
-        root.getChildren().add(scrollPane); 
+    private OverviewPage() {
+        app = App.getInstance();
+        setupLayout();
+        getStyleClass().add("main-layout");
         
-        scrollPane.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
-        
-        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        
-     // Create a floating round button
-        Button floatingButton = new Button("+");
-        floatingButton.setFont(new Font("Montserrat", 25));
-        floatingButton.setStyle(
-                "-fx-background-radius: 50em; " + // Make the button round
-                "-fx-min-width: 50px; " +         // Width of the button
-                "-fx-min-height: 50px; " +        // Height of the button
-                "-fx-background-color: #ff4081; " + // Color of the button
-                "-fx-text-fill: white;"
-        );
-
-        // Set up the button event handler
-        floatingButton.setOnAction(e -> {
-    		AddTransactionForm form = new AddTransactionForm();
-    		form.setListView(scrollPane);
-            Modal modal = new Modal(form, "Add transaction");
-            modal.show();
+        reloadRequest.addListener((observable, oldValue, newValue) -> {
+            if (newValue) {
+                reload();  // Reload the page when the value changes to true
+                reloadRequest.set(false);  // Reset the property to false after reloading
+            }
         });
-     // Create a StackPane to overlay the button on top of the ScrollPane
-           // Add ScrollPane as the background
-        root.getChildren().add(floatingButton); 
-        // Align the button to the bottom center and set margins
-        StackPane.setAlignment(floatingButton, Pos.BOTTOM_CENTER);
-        StackPane.setMargin(floatingButton, new Insets(0, 0, 20, 0));
-        root.setMaxWidth(Double.MAX_VALUE);
-        root.setMaxHeight(Double.MAX_VALUE);
-        pane.getChildren().add(root);
-		transactionListPane = pane;
-	}
+    }
+    
+    public static OverviewPage getInstance() {
+    	if (overviewPage == null) overviewPage = new OverviewPage();
+    	return overviewPage;
+    }
+    
+    public void requestReloading () {
+    	reloadRequest.set(true);
+    }
+    
+    private void reload () {
+    	this.getChildren().clear();
+    	setupLayout();
+    }
 
-	private void loadBalancePane() {
-		RoundedPane pane = new RoundedPane("Total Balance");
-		BalanceLabel amount = new BalanceLabel(0);
-		double sum = 0;
-		for (Account account: app.getAccountList()) {
-			sum += account.getBalance();
-		}
-		amount.update(sum, Color.BLACK);
-		amount.setFont(new Font("Montserrat Bold", 25));
-		pane.getChildren().add(amount);
-		balancePane = pane;
-	}
+    private void setupLayout() {
+        mainLayout = createMainLayout();
+        loadHeader();
+        loadSummaryPane();
+        loadDetailsPane();
+        mainLayout.getChildren().addAll(headerPane, summaryPane, detailsPane);
+        setCenter(createScrollPane(mainLayout));
+    }
 
-	private void loadTotalExpensePane() {
-		RoundedPane pane = new RoundedPane("Total Expense");
-		BalanceLabel amount = new BalanceLabel(0);
-		double sum = 0;
-		for (Transaction transaction: app.getTransactionList()) {
-			if (transaction.getType().equals("Expense"))
-				sum -= transaction.getAmount();
-		}
-		amount.update(sum);
-		amount.setFont(new Font("Montserrat Bold", 25));
-		pane.getChildren().add(amount);
-		totalExpensePane = pane;
-	}
+    private void loadNavigationButtons() {
+        navigationButtons = new HBox();
+        navigationButtons.setAlignment(Pos.TOP_RIGHT);
+        navigationButtons.getStyleClass().add("navigation-buttons");
+        
+        Button prevButton = createPrevButton();
+        Button nextButton = createNextButton();
+        
+        navigationButtons.getChildren().addAll(prevButton, nextButton);
+        headerPane.getChildren().add(navigationButtons); // Add to header or another appropriate layout
+        updateNavigationButtonsState(nextButton); // Update button state on load
+    }
 
-	private void loadTotalIncomePane() {
-		RoundedPane pane = new RoundedPane("Total Income");
-		BalanceLabel amount = new BalanceLabel(0);
-		double sum = 0;
-		for (Transaction transaction: app.getTransactionList()) {
-			if (transaction.getType().equals("Income"))
-				sum += transaction.getAmount();
-		}
-		amount.update(sum);
-		amount.setFont(new Font("Montserrat Bold", 25));
-		pane.getChildren().add(amount);
-		totalIncomePane = pane;
-	}
+    private Button createPrevButton() {
+        Button prevButton = new Button("<");
+        prevButton.getStyleClass().addAll("nav-button", "prev-button", "border-neutral", "fill-neutral"); // Add both classes
+        prevButton.setOnAction(e -> {
+            app.prevTimeStamp(); // Call method to go to previous timestamp
+            reloadOverviewPage(); // Reload the overview page
+        });
+        return prevButton;
+    }
 
-	private void buildLayout () {
-		add(header, "span, wrap");
-		add(totalIncomePane, "push");
-		add(totalExpensePane, "push");
-		add(balancePane, "wrap, push");
-		add(transactionListPane, "span 2 3");
-		add(balanceChart, "wrap, push");
-		add(incomeChart, "wrap, push");
-		add(expenseChart, "push");
-	}
+    private Button createNextButton() {
+        Button nextButton = new Button(">");
+        nextButton.getStyleClass().addAll("nav-button", "next-button", "border-neutral", "fill-neutral"); // Add both classes
+        nextButton.setOnAction(e -> {
+            app.nextTimeStamp(); // Call method to go to next timestamp
+            reloadOverviewPage(); // Reload the overview page
+        });
+        return nextButton;
+    }
+
+
+    private void updateNavigationButtonsState(Button nextButton) {
+        if (app.latestTime()) {
+            nextButton.setDisable(true); // Disable the next button if at the latest timestamp
+        } else {
+            nextButton.setDisable(false);
+        }
+    }
+
+    private void reloadOverviewPage() {
+        // Update the header, summary, and details without clearing navigation buttons
+        loadHeader(); // Reload the header (it will not clear the buttons)
+        loadSummaryPane(); // Reload the summary pane
+        loadDetailsPane(); // Reload the details pane
+        mainLayout.getChildren().clear(); // Clear current main layout
+        mainLayout.getChildren().addAll(headerPane, summaryPane, detailsPane); // Add updated components
+    }
+
+    private VBox createMainLayout() {
+        VBox layout = new VBox(VBOX_SPACING);
+        return layout;
+    }
+
+    private ScrollPane createScrollPane(VBox content) {
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setContent(content);
+        scrollPane.getStyleClass().addAll("edge-to-edge", "no-fill");
+        return scrollPane;
+    }
+
+    // Header Pane
+    private void loadHeader() {
+        headerPane = new VBox(10);
+        headerPane.getStyleClass().add("header-pane");
+        headerPane.getChildren().add(createPageTitle());
+        loadNavigationButtons();
+    }
+
+    private Label createPageTitle() {
+        String titleText = "Overview of " + getMonthYearString();
+        Label pageTitle = new Label(titleText);
+        pageTitle.getStyleClass().add("page-title");
+        return pageTitle;
+    }
+
+    private String getMonthYearString() {
+        if (app.isMonthView()) {
+            Month monthEnum = Month.of(app.getMonth());
+            return monthEnum.getDisplayName(TextStyle.FULL, Locale.ENGLISH) + ", " + app.getYear();
+        } else {
+            return String.valueOf(app.getYear());
+        }
+    }
+
+
+    // Summary Pane
+    private void loadSummaryPane() {
+        summaryPane = new HBox(SUMMARY_PANE_SPACING);
+        summaryPane.getStyleClass().add("summary-pane");
+        setupSummaryPanes();
+        summaryPane.getChildren().addAll(totalIncomePane, totalExpensePane, balancePane);
+    }
+
+    private void setupSummaryPanes() {
+        setupTotalIncomePane();
+        setupTotalExpensePane();
+        setupBalancePane();
+    }
+
+    private void setupTotalIncomePane() {
+        totalIncomePane = new RoundedPane("Total Income");
+        BalanceLabel incomeAmount = new BalanceLabel(calculateTotalIncome());
+        incomeAmount.getStyleClass().add("balance-label");
+        totalIncomePane.getChildren().add(incomeAmount);
+        HBox.setHgrow(totalIncomePane, Priority.ALWAYS);
+    }
+
+    private double calculateTotalIncome() {
+        return app.getTransactionList().stream()
+                .filter(t -> INCOME_TYPE.equals(t.getType()))
+                .mapToDouble(Transaction::getAmount)
+                .sum();
+    }
+
+    private void setupTotalExpensePane() {
+        totalExpensePane = new RoundedPane("Total Expense");
+        BalanceLabel expenseAmount = new BalanceLabel(calculateTotalExpense());
+        expenseAmount.getStyleClass().add("balance-label");
+        totalExpensePane.getChildren().add(expenseAmount);
+        HBox.setHgrow(totalExpensePane, Priority.ALWAYS);
+    }
+
+    private double calculateTotalExpense() {
+        return -app.getTransactionList().stream()
+                .filter(t -> EXPENSE_TYPE.equals(t.getType()))
+                .mapToDouble(Transaction::getAmount)
+                .sum();
+    }
+
+    private void setupBalancePane() {
+        balancePane = new RoundedPane("Total Balance");
+        BalanceLabel balanceAmount = new BalanceLabel(calculateBalance());
+        balanceAmount.update(calculateBalance(), true);
+        balanceAmount.getStyleClass().add("balance-label");
+        balancePane.getChildren().add(balanceAmount);
+        HBox.setHgrow(balancePane, Priority.ALWAYS);
+    }
+
+    private double calculateBalance() {
+        return app.getAccountList().stream()
+                .mapToDouble(Account::getTimeRelatedBalance)
+                .sum();
+    }
+
+    // Details Pane
+    private void loadDetailsPane() {
+        detailsPane = new HBox(DETAILS_PANE_SPACING);
+        detailsPane.getStyleClass().add("details-pane");
+        setupTransactionListPane();
+        setupChartsPane();
+        detailsPane.getChildren().addAll(transactionListPane, chartsPane);
+        VBox.setVgrow(detailsPane, Priority.ALWAYS);
+    }
+
+    private void setupTransactionListPane() {
+        transactionListPane = new RoundedPane("Transaction List");
+        StackPane transactionListStackPane = createTransactionListStackPane();
+        transactionListPane.getChildren().add(transactionListStackPane);
+        HBox.setHgrow(transactionListPane, Priority.ALWAYS);
+    }
+
+    private StackPane createTransactionListStackPane() {
+        TransactionListView transactionListView = createTransactionListView();
+        StackPane stackPane = new StackPane(transactionListView, createAddTransactionButton(transactionListView));
+        StackPane.setAlignment(stackPane.getChildren().get(1), Pos.BOTTOM_CENTER);
+        VBox.setVgrow(stackPane, Priority.ALWAYS); // Ensure the stack pane expands vertically
+        VBox.setVgrow(transactionListView, Priority.ALWAYS);
+        return stackPane;
+    }
+
+    private TransactionListView createTransactionListView() {
+        List<Transaction> transactionList = app.getTransactionList();
+        TransactionListView transactionListView = new TransactionListView(transactionList);
+        transactionListView.getStyleClass().add("transaction-list");
+        return transactionListView;
+    }
+
+    private Button createAddTransactionButton(TransactionListView transactionListView) {
+        Button addButton = new Button("+");
+        addButton.getStyleClass().addAll("add-button", "border-blue", "fill-blue", "background-neutral");
+        addButton.getStyleClass().remove("button");
+        addButton.setOnAction(e -> showAddTransactionForm(transactionListView));
+        return addButton;
+    }
+
+    private void showAddTransactionForm(TransactionListView transactionListView) {
+    	Modal modal = new Modal();
+    	modal.setContent(new AddTransactionForm(modal));
+        modal.show();
+    }
+
+    private void setupChartsPane() {
+        chartsPane = new VBox(VBOX_SPACING);
+        chartsPane.getStyleClass().add("charts-pane");
+        setupIncomeChart();
+        setupExpenseChart();
+        chartsPane.getChildren().addAll(incomeChart, expenseChart);
+        HBox.setHgrow(chartsPane, Priority.ALWAYS);
+    }
+
+    private void setupIncomeChart() {
+        incomeChart = new RoundedPane("Income Chart");
+        List<Transaction> transactionList = app.getTransactionList();
+        List<GraphDataPoint> incomeData = GraphDataConverter.convertToIncome(transactionList);
+        
+        if (incomeData == null || incomeData.isEmpty()) {
+            Label noDataLabel = new Label("No data");
+            noDataLabel.setTextFill(Color.GRAY);
+            incomeChart.getChildren().add(noDataLabel);
+        } else {
+            SmoothedLineChart incomeLineChart = new SmoothedLineChart();
+            incomeLineChart.addSeries(incomeData, INCOME_TYPE, Color.valueOf("#66c2a5"));
+            incomeChart.getChildren().add(incomeLineChart);
+            incomeLineChart.getStyleClass().add("line-chart");
+        }
+        VBox.setVgrow(incomeChart, Priority.ALWAYS);
+    }
+
+    private void setupExpenseChart() {
+        expenseChart = new RoundedPane("Expense Chart");
+        List<Transaction> transactionList = app.getTransactionList();
+        List<GraphDataPoint> expenseData = GraphDataConverter.convertToExpense(transactionList);
+        
+        if (expenseData == null || expenseData.isEmpty()) {
+            Label noDataLabel = new Label("No data");
+            noDataLabel.setTextFill(Color.GRAY);
+            expenseChart.getChildren().add(noDataLabel);
+        } else {
+            SmoothedLineChart expenseLineChart = new SmoothedLineChart();
+            expenseLineChart.addSeries(expenseData, EXPENSE_TYPE, Color.valueOf("#d53e4f"));
+            expenseChart.getChildren().add(expenseLineChart);
+            expenseLineChart.getStyleClass().add("line-chart");
+        }
+        VBox.setVgrow(expenseChart, Priority.ALWAYS);
+    }
+
 }

@@ -45,17 +45,31 @@ public class CategoryDAO extends BaseDAO {
     }
 
     public void delete(int categoryId) {
-        String sql = "DELETE FROM categories WHERE id = ?";
+        String deleteTransactionsSql = "DELETE FROM transactions WHERE category = ?";
+        String deleteCategorySql = "DELETE FROM categories WHERE id = ?";
+        
         try {
-        	openConnection();
-			PreparedStatement stmt = connection.prepareStatement(sql);
-            stmt.setInt(1, categoryId);
-            stmt.executeUpdate();
-            closeConnection();
+            openConnection();
+
+            // First, delete related transactions
+            PreparedStatement stmtTransactions = connection.prepareStatement(deleteTransactionsSql);
+            stmtTransactions.setInt(1, categoryId);
+            stmtTransactions.executeUpdate();
+            stmtTransactions.close();
+
+            // Then, delete the category
+            PreparedStatement stmtCategory = connection.prepareStatement(deleteCategorySql);
+            stmtCategory.setInt(1, categoryId);
+            stmtCategory.executeUpdate();
+            stmtCategory.close();
+
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            closeConnection();
         }
     }
+
 
     public List<Category> findAll() {
         List<Category> categories = new ArrayList<>();

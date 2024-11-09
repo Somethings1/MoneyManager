@@ -26,30 +26,29 @@ public class App {
 		categoryService = new CategoryService();
 		transactionService = new TransactionService();
 		
-		monthView = false;
+		monthView = true;
 		month = LocalDateTime.now().getMonthValue();
 		year = LocalDateTime.now().getYear();
 		
+		reload();
+	}
+	
+	public void reload() {
 		loadAccountData();
 		loadCategoryData();
 		loadTransactionData();
-		
 	}
 	
-	/*
-	 * PRIVATE METHODS
-	*/
-	
-	private void loadAccountData () {
+	public void loadAccountData () {
 		accountList = accountService.getAllAccounts();
 	}
 	
-	private void loadCategoryData () {
+	public void loadCategoryData () {
 		incomeCategoryList = categoryService.getAllIncomeCategories();
 		expenseCategoryList = categoryService.getAllExpenseCategories();
 	}
 	
-	private void loadTransactionData () {
+	public void loadTransactionData () {
 		if (isMonthView())
 			transactionList = transactionService.getTransactionsByMonth(month, year);
 		else 
@@ -68,8 +67,9 @@ public class App {
 		return month;
 	}
 
-	public void setMonth(int month) {
+	public void setMonth(int month, int year) {
 		this.month = month;
+		this.year = year;
 		loadTransactionData();
 	}
 
@@ -100,12 +100,59 @@ public class App {
 
 	public void setMonthView(boolean monthView) {
 		this.monthView = monthView;
+		if (!monthView) {
+			month = 12;
+		}
 		loadTransactionData();
 	}
+	
+	public boolean latestTime() {
+        LocalDateTime now = LocalDateTime.now();
+        if (isMonthView()) {
+            return year == now.getYear() && month == now.getMonthValue();
+        } else {
+            return year == now.getYear();
+        }
+    }
+
+    public void prevTimeStamp() {
+        if (isMonthView()) {
+            if (month == 1) { // If current month is January
+                month = 12; // Set month to December
+                year--; // Decrease the year
+            } else {
+                month--; // Just decrease the month
+            }
+        } else {
+            year--; // Decrease the year in year view
+        }
+        loadTransactionData(); // Reload transaction data
+    }
+
+    public void nextTimeStamp() {
+        LocalDateTime now = LocalDateTime.now();
+        if (isMonthView()) {
+            if (month == 12) { // If current month is December
+                month = 1; // Set month to January
+                year++; // Increase the year
+            } else {
+                month++; // Just increase the month
+            }
+        } else {
+            if (year < now.getYear()) {
+                year++; // Increase the year in year view
+            }
+        }
+        loadTransactionData(); // Reload transaction data
+    }
 
 	public static App getInstance () {
 		if (instance == null)
 			instance = new App();
 		return instance;
+	}
+
+	public List<Category> getCategoryList() {
+		return categoryService.getAllCategories();
 	}
 }

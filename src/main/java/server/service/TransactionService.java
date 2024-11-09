@@ -5,6 +5,9 @@ import server.model.Transaction;
 
 import java.util.List;
 
+import gui.app.App;
+
+
 public class TransactionService {
     private final TransactionDAO transactionDAO;
 
@@ -12,17 +15,21 @@ public class TransactionService {
         transactionDAO = new TransactionDAO();
     }
 
-    public void addTransaction(Transaction transaction) {
+    public void addTransaction(Transaction transaction) throws Exception {
+    	assertTransaction(transaction);
         transactionDAO.insert(transaction);
+        App.getInstance().loadTransactionData();
     }
 
-    public void updateTransaction(Transaction transaction) {
-    	System.out.println(transaction.getType());
+    public void updateTransaction(Transaction transaction) throws Exception {
+    	assertTransaction(transaction);
         transactionDAO.update(transaction);
+        App.getInstance().loadTransactionData();
     }
 
     public void removeTransaction(int transactionId) {
         transactionDAO.remove(transactionId);
+        App.getInstance().loadTransactionData();
     }
 
     public Transaction getTransaction(int id) {
@@ -40,5 +47,19 @@ public class TransactionService {
     public List<Transaction> getTransactionsByYear (int year) {
     	return transactionDAO.findByYear(year);
     }
-    // Additional methods for filtering and sorting transactions can be added here
+    
+    public List<Transaction> getAllTransactions () {
+    	return transactionDAO.getAllTransactions();
+    }
+    
+    private void assertTransaction (Transaction transaction) throws Exception {
+    	if (transaction.getAmount() < 0) 
+    		throw new Exception("Amount cannot be negative");
+    	if (transaction.getSourceAccount() == 0) 
+    		throw new Exception("Source account cannot be null");
+    	if (transaction.getType().equals("Transfer") && transaction.getDestinationAccount() == 0) 
+    		throw new Exception("Destination account cannot be null");
+    	if (!transaction.getType().equals("Transfer") && transaction.getCategory() == 0)
+    		throw new Exception("Category cannot be null");
+    }
 }

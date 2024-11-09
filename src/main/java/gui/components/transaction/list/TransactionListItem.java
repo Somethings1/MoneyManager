@@ -5,7 +5,7 @@ import org.tbee.javafx.scene.layout.MigPane;
 import javafx.scene.control.Label;
 import javafx.scene.paint.Color;
 import server.model.Transaction;
-import gui.components.transaction.form.EditTransactionForm;
+import gui.components.form.transaction.EditTransactionForm;
 import gui.components.util.BalanceLabel;
 import gui.components.util.Modal;
 
@@ -42,15 +42,12 @@ public class TransactionListItem extends MigPane {
         // Set the double-click event
         setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
-            	EditTransactionForm form = new EditTransactionForm(this.transaction);
-            	form.setItem(this);
-                Modal modal = new Modal(form, "Edit transaction");
+                Modal modal = new Modal();
+                modal.setContent(new EditTransactionForm(this.transaction, modal));
                 modal.show();
             }
         });
-		setStyle("-fx-border-color: black; " +
-                "-fx-border-width: 1px; " +
-                "-fx-border-radius: 10px;");
+        getStyleClass().addAll("transaction-item", "border-neutral", "item");
 	}
 	
 	private void updateCategoryLabel () {
@@ -63,7 +60,7 @@ public class TransactionListItem extends MigPane {
 	
 	private void updateAmountLabel () {
 		if (transaction.getType().equals("Transfer"))
-			amountLabel.update(transaction.getAmount(), Color.GREY);
+			amountLabel.update(transaction.getAmount(), true);
 		else if (transaction.getType().equals("Expense"))
 			amountLabel.update(-transaction.getAmount());
 		else

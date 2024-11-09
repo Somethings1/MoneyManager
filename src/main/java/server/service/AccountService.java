@@ -5,6 +5,8 @@ import server.model.Account;
 
 import java.util.List;
 
+import gui.app.App;
+
 public class AccountService {
     private final AccountDAO accountDAO;
 
@@ -12,16 +14,21 @@ public class AccountService {
         accountDAO = new AccountDAO();
     }
 
-    public void addAccount(Account account) {
+    public void addAccount(Account account) throws Exception {
+    	assertAccount(account);
         accountDAO.insert(account);
+        App.getInstance().loadAccountData();
     }
 
-    public void updateAccount(Account account) {
+    public void updateAccount(Account account) throws Exception {
+    	assertAccount(account);
         accountDAO.update(account);
+        App.getInstance().loadAccountData();
     }
 
     public void removeAccount(int accountId) {
         accountDAO.delete(accountId);
+        App.getInstance().loadAccountData();
     }
 
     public List<Account> getAllAccounts() {
@@ -34,5 +41,17 @@ public class AccountService {
     
     public void adjustBalance (int id, double amount) {
     	accountDAO.adjustAccountBalance(id, amount);
+    	App.getInstance().loadAccountData();
+    }
+    
+    public double getBalance (int id, int year, int month) {
+    	return accountDAO.getBalanceAtEndOfMonth(id, month, year);
+    }
+    
+    private void assertAccount(Account account) throws Exception {
+    	if (account.getName().isEmpty()) 
+    		throw new Exception("Account/Saving name cannot be null.");
+    	if (account.getGroup().equals("Saving") && account.getGoal() == 0)
+    		throw new Exception("Saving goal is not set.");
     }
 }

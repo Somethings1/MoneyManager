@@ -1,38 +1,68 @@
 package gui.components.util;
 
-import javafx.geometry.Pos;
+import gui.app.AppSettings;
 import javafx.scene.control.Label;
-import javafx.scene.layout.Region;
-import javafx.scene.paint.Color;
+import java.text.DecimalFormat;
 
 public class BalanceLabel extends Label {
 
+    private static final AppSettings settings = AppSettings.getInstance(); // Singleton instance for settings
+
+    // Constructor that defaults neutral to false
     public BalanceLabel(double number) {
-        this(number, getColorBasedOnValue(number));
+        this(number, false);
     }
 
-    public BalanceLabel(double number, Color color) {
+    // Constructor with neutral parameter
+    public BalanceLabel(double number, boolean neutral) {
         super(formatNumber(number));
-        
-    }
-
-    private static Color getColorBasedOnValue(double number) {
-        return number >= 0 ? Color.BLUE : Color.RED;
+        updateStyle(number, neutral); // Apply initial style based on the value
+        getStyleClass().add("balance-label"); // Add CSS style class
     }
 
     private static String formatNumber(double number) {
-        // Format the number as a string, removing the negative sign for negative numbers
-        return String.format("%.2f", Math.abs(number)); // Use Math.abs to get the absolute value
+        // Use the settings for number formatting
+        int decimalPlaces = settings.getNumberOfDecimalPlaces(); // Get the number of decimal places from settings
+        String currencySymbol = settings.getCurrency(); // Get the currency symbol from settings
+        boolean currencyBeforeAmount = settings.isCurrencyBeforeAmount(); // Get the currency position setting
+
+        // Create a DecimalFormat for formatting the number with commas and the specified decimal places
+        StringBuilder pattern = new StringBuilder("#,##0");
+        if (decimalPlaces > 0) {
+            pattern.append(".");
+            for (int i = 0; i < decimalPlaces; i++) {
+                pattern.append("0");
+            }
+        }
+
+        DecimalFormat decimalFormat = new DecimalFormat(pattern.toString());
+        String formattedNumber = decimalFormat.format(Math.abs(number)); // Format the number with commas
+
+        // Return the formatted number with the currency symbol
+        if (currencyBeforeAmount) {
+            return currencySymbol + " " + formattedNumber; // Currency before amount
+        } else {
+            return formattedNumber + " " + currencySymbol; // Currency after amount
+        }
     }
-    
-    public void update (double number, Color color) {
-    	setTextFill(color);
-        setAlignment(Pos.CENTER_RIGHT); // Align text to the right
-        setMinWidth(Region.USE_PREF_SIZE);
-        super.setText(formatNumber(number));
+
+    public void update(double number) {
+        update(number, false); // Default to not neutral when updating
     }
-    
-    public void update (double number) {
-    	update(number, getColorBasedOnValue(number));
+
+    public void update(double number, boolean neutral) {
+        setText(formatNumber(number)); // Update the label text with the formatted number
+        updateStyle(number, neutral); // Update style based on the new value
+    }
+
+    private void updateStyle(double number, boolean neutral) {
+        getStyleClass().removeAll("fill-red", "fill-green", "fill-neutral"); // Clear previous styles
+        if (neutral) {
+            getStyleClass().add("fill-neutral");
+        } else if (number < 0) {
+            getStyleClass().add("fill-red");
+        } else {
+            getStyleClass().add("fill-green");
+        }
     }
 }

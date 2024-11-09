@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import server.service.AccountService;
 import server.service.CategoryService;
+import server.utils.TimeUtils;
 
 public class Transaction {
     private int id;
@@ -40,7 +41,7 @@ public class Transaction {
     }
 
     public LocalDateTime getDateTime() {
-        return dateTime;
+    	return this.dateTime;
     }
 
     public void setDateTime(LocalDateTime dateTime) {
@@ -125,6 +126,18 @@ public class Transaction {
             this.note,                     // Copying the note
             this.type                      // Copying the type (income, expense, or transfer)
         );
+    }
+    
+    public static Transaction createDefault() {
+    	Transaction transaction = new Transaction();
+    	transaction.dateTime = LocalDateTime.now();
+    	transaction.setAmount(0);
+    	transaction.setCategory(0);
+    	transaction.setSourceAccount(0);
+    	transaction.setDestinationAccount(0);
+    	transaction.setNote("");
+    	transaction.setType("Expense");
+    	return transaction;
     }
     
 	@Override

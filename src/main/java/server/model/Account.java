@@ -1,5 +1,8 @@
 package server.model;
 
+import gui.app.App;
+import server.service.AccountService;
+
 public class Account {
 	private int id;
 	private String name;
@@ -11,11 +14,12 @@ public class Account {
 	public Account() {
 	}
 
-	public Account(int id, String name, String group, double balance) {
+	public Account(int id, String name, String group, double balance, double goal) {
 		this.id = id;
 		this.name = name;
 		this.group = group;
 		this.balance = balance;
+		this.goal = goal;
 	}
 
 	// Getters and Setters
@@ -49,6 +53,23 @@ public class Account {
 
 	public void setBalance(double balance) {
 		this.balance = balance;
+	}
+	
+	public double getGoal() {
+		return goal;
+	}
+	
+	public void setGoal(double goal) {
+		this.goal = goal;
+	}
+	
+	public double getTimeRelatedBalance () {
+		App app = App.getInstance();
+		AccountService accountService = new AccountService();
+		
+		if (app.latestTime()) return this.balance;
+		if (app.isMonthView()) return accountService.getBalance(this.id, app.getYear(), app.getMonth());
+		return accountService.getBalance(this.id, app.getYear(), 12);
 	}
 	
 	@Override

@@ -58,5 +58,15 @@
     	<scope>test</scope>
 		</dependency>
 
-</dependencies>
+  </dependencies>
+  <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>**/*</include> <!-- Include all files -->
+                </includes>
+            </resource>
+        </resources>
+    </build>
 </project>
